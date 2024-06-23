@@ -1,0 +1,154 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error, r2_score
+from scipy.optimize import curve_fit
+
+# 데이터셋 로드
+file_202110 = 'TB_LAYER_CK_INFO-202110 (1).csv'
+file_202206 = 'TB_LAYER_CK_INFO-202206 (1).csv'
+
+data_202110 = pd.read_csv(file_202110)
+data_202206 = pd.read_csv(file_202206)
+
+# 데이터셋 병합
+combined_data = pd.concat([data_202110, data_202206], ignore_index=True)
+
+# 결측값 확인
+missing_values = combined_data.isnull().sum()
+
+
+
+
+
+
+
+
+
+# 선택된 특성
+selected_features = ['CNT_PER_FEED_QY', 'CNT_PER_BEV_QY', 'TOP_TP', 'LWET_TP', 'TOP_HMDT', 'LWET_HMDT', 'WEEKS']
+
+# SPAWN_RT가 0인 행 제거
+filtered_data = combined_data[combined_data['SPAWN_RT'] > 0]
+
+# 특성과 목표 변수 선택
+X_filtered = filtered_data[selected_features]
+y_filtered = filtered_data['SPAWN_RT']
+
+# 데이터를 학습 및 테스트 세트로 분할 (70% 학습, 30% 테스트)
+X_train_filt, X_test_filt, y_train_filt, y_test_filt = train_test_split(X_filtered, y_filtered, test_size=0.3, random_state=42)
+
+# 데이터 표준화
+scaler_filt = StandardScaler()
+X_train_filt_scaled = scaler_filt.fit_transform(X_train_filt)
+X_test_filt_scaled = scaler_filt.transform(X_test_filt)
+
+# 필터링된 데이터로 Random Forest 모델 학습
+rf_model_filt = RandomForestRegressor(n_estimators=100, random_state=42)
+rf_model_filt.fit(X_train_filt_scaled, y_train_filt)
+
+# 예측 수행
+rf_predictions_filt = rf_model_filt.predict(X_test_filt_scaled)
+
+
+
+
+
+
+
+
+
+# Random Forest 모델 평가
+rf_mse_filt = mean_squared_error(y_test_filt, rf_predictions_filt)
+rf_mape_filt = mean_absolute_percentage_error(y_test_filt, rf_predictions_filt) * 100
+rf_rmspe_filt = np.sqrt(np.mean(((y_test_filt - rf_predictions_filt) / y_test_filt) ** 2)) * 100
+rf_r2_filt = r2_score(y_test_filt, rf_predictions_filt)
+
+# Linear Regression 모델 학습
+lr_model = LinearRegression()
+lr_model.fit(X_train_filt_scaled, y_train_filt)
+
+# 예측 수행
+lr_predictions = lr_model.predict(X_test_filt_scaled)
+
+# Linear Regression 모델 평가
+lr_mse = mean_squared_error(y_test_filt, lr_predictions)
+lr_mape = mean_absolute_percentage_error(y_test_filt, lr_predictions) * 100
+lr_rmspe = np.sqrt(np.mean(((y_test_filt - lr_predictions) / y_test_filt) ** 2)) * 100
+lr_r2 = r2_score(y_test_filt, lr_predictions)
+
+# Gompertz 함수 정의
+def gompertz_model(x, a, b, c):
+    return a * np.exp(-b * np.exp(-c * x))
+
+# 단순화를 위해 하나의 설명 변수만 사용: 'WEEKS'  
+X_gompertz = X_filtered['WEEKS'].values
+y_gompertz = y_filtered.values
+
+# 데이터를 학습 및 테스트 세트로 분할 (70% 학습, 30% 테스트)
+X_train_gomp, X_test_gomp, y_train_gomp, y_test_gomp = train_test_split(X_gompertz, y_gompertz, test_size=0.3, random_state=42)
+
+# Gompertz 모델 피팅
+popt, _ = curve_fit(gompertz_model, X_train_gomp, y_train_gomp, maxfev=10000)
+
+# 예측 수행
+gompertz_predictions = gompertz_model(X_test_gomp, *popt)
+
+# Gompertz 모델 평가
+gompertz_mse = mean_squared_error(y_test_gomp, gompertz_predictions)  
+gompertz_mape = mean_absolute_percentage_error(y_test_gomp, gompertz_predictions) * 100
+gompertz_rmspe = np.sqrt(np.mean(((y_test_gomp - gompertz_predictions) / y_test_gomp) ** 2)) * 100
+gompertz_r2 = r2_score(y_test_gomp, gompertz_predictions)
+
+
+
+
+
+
+
+
+# 모든 평가 지표 출력
+results = {
+    "Random Forest": {
+        "MSE": rf_mse_filt,
+        "MAPE": rf_mape_filt,
+        "RMSPE": rf_rmspe_filt, 
+        "R^2": rf_r2_filt
+    },
+    "Linear Regression": {
+        "MSE": lr_mse,
+        "MAPE": lr_mape,
+        "RMSPE": lr_rmspe,
+        "R^2": lr_r2  
+    },
+    "Gompertz Nonlinear Model": {
+        "MSE": gompertz_mse,
+        "MAPE": gompertz_mape,
+        "RMSPE": gompertz_rmspe,
+     
+    }
+}
+
+results, combined_file_path
+
+
+
+
+
+
+({'Random Forest': {'MSE': 41.72599101029683,
+   'MAPE': 25.39645880954955,
+   'RMSPE': 429.7519827408973,
+   'R^2': 0.836429006741338},
+  'Linear Regression': {'MSE': 192.63691121290103,
+   'MAPE': 145.99582379179324,
+   'RMSPE': 2242.580732220494,
+   'R^2': 0.2448397235766281},
+  'Gompertz Nonlinear Model': {'MSE': 256.14718577897537,
+   'MAPE': 271.89609581073836,
+   'RMSPE': 4531.76345483795}},
+ '/mnt/data/combined_poultry_data.csv')
+
